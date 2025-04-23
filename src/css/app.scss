@@ -1,1 +1,57 @@
 // app global css in SCSS form
+body {
+  background: #151828;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+}
+
+.q-page {
+  padding: 24px;
+}
+
+// Общие стили для всех карточек
+.q-card {
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+// Стили для полей ввода
+.q-field {
+  &--outlined {
+    .q-field__control {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: #6A7085;
+      
+      &:hover {
+        border-color: rgba(106, 112, 133, 0.7);
+      }
+    }
+    
+    &.q-field--focused {
+      .q-field__control {
+        border-color: #007BFF;
+      }
+    }
+  }
+}
+
+// Стили для кнопок
+.q-btn {
+  text-transform: none;
+  
+  &--standard {
+    &.bg-primary {
+      background: #0088FF !important;
+    }
+  }
+}
+
+/* Добавляем переопределение цвета для кнопок с цветом primary */
+.q-btn.bg-primary {
+  background-color: #007BFF !important; // Новый, более яркий синий цвет
+}
+
+// Можно добавить стили для hover/focus, если нужно
+.q-btn.bg-primary:hover {
+  background-color: #0056b3 !important; // Пример цвета при наведении
+}
