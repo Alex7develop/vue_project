@@ -9,23 +9,25 @@
               dark
               outlined
               dense
-              v-model="networkSettings.ip"
+              v-model="ipRef"
               label="IP"
               label-color="grey-6"
               :input-style="{ color: 'white' }"
               :rules="[ (val: string) => !!val || 'IP is required', (val: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(val) || 'Invalid IP format']"
               lazy-rules
+              :disable="!isOnline"
             />
             <q-input
               dark
               outlined
               dense
-              v-model="networkSettings.userName"
+              v-model="userRef"
               label="UserName"
               label-color="grey-6"
               :input-style="{ color: 'white' }"
               :rules="[ (val: string) => !!val || 'Username is required']"
               lazy-rules
+              :disable="!isOnline"
             />
           </div>
           <!-- Правая колонка -->
@@ -34,25 +36,28 @@
               dark
               outlined
               dense
-              v-model.number="networkSettings.port"
+              v-model.number="portRef"
               label="Port"
               type="number"
               label-color="grey-6"
               :input-style="{ color: 'white' }"
-              :rules="[ (val: number) => !!val || 'Port is required', (val: number) => val > 0 && val <= 65535 || 'Port must be between 1 and 65535']"
+              :rules="[ (val: number | null) => !!val || 'Port is required', (val: number | null) => (val && val > 0 && val <= 65535) || 'Port must be between 1 and 65535']"
               lazy-rules
+              :disable="!isOnline"
             />
             <q-input
               dark
               outlined
               dense
-              v-model="networkSettings.password"
+              v-model="passwordRef"
               label="Password"
               type="password"
+              placeholder="Enter new password (if changing)"
               label-color="grey-6"
               :input-style="{ color: 'white' }"
-              :rules="[ (val: string) => !!val || 'Password is required']"
+              :rules="[ (val: string) => !!val || 'Password is required to save settings']"
               lazy-rules
+              :disable="!isOnline"
             />
           </div>
         </div>
@@ -64,7 +69,7 @@
             label="Setting"
             type="submit"
             :loading="isSavingNetwork"
-            :disable="!isOnline"
+            :disable="!isOnline || isSavingNetwork"
             style="border-radius: 8px;"
           />
         </div>
@@ -74,30 +79,71 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { ref, watchEffect } from 'vue';
+import { useQuasar } from 'quasar';
+import { useDeviceData } from '../../composables/useDeviceData';
+import { updateConfig, getApiErrorMessage } from '../../services/api';
 
-// TODO: Получать начальные значения и статус isOnline извне
-const isOnline = ref(true);
+const $q = useQuasar();
+const { statistics, isOnline, refreshData } = useDeviceData();
+
 const isSavingNetwork = ref(false);
 
-const networkSettings = reactive({
-  ip: '',
-  port: 1000, // Пример
-  userName: '',
-  password: '****', // Пример
+// Используем локальные ref для полей формы
+const ipRef = ref('');
+const portRef = ref<number | null>(null);
+const userRef = ref('');
+const passwordRef = ref(''); // Пароль всегда пустой при загрузке
+
+// Следим за изменениями в statistics и обновляем поля формы
+watchEffect(() => {
+  if (statistics.value?.conf) {
+    ipRef.value = statistics.value.conf.ip || '';
+    portRef.value = statistics.value.conf.port || null;
+    userRef.value = statistics.value.conf.user || '';
+    // passwordRef не инициализируем из statistics.value.conf.password для безопасности
+  }
 });
 
-const onSubmitNetwork = () => {
+const onSubmitNetwork = async () => {
+  // Дополнительная проверка, если правила q-form не сработали
+  if (!ipRef.value || !portRef.value || !userRef.value || !passwordRef.value) {
+    $q.notify({
+      color: 'warning',
+      message: 'Please fill in all required fields.',
+      icon: 'warning'
+    });
+    return;
+  }
+
   isSavingNetwork.value = true;
-  console.log('Submitting network settings:', networkSettings);
-  // TODO: Вызвать API api/conf
-  // Эмуляция задержки
-  setTimeout(() => {
+  try {
+    await updateConfig({
+      ip: ipRef.value,
+      port: portRef.value,
+      user: userRef.value,
+      password: passwordRef.value,
+    });
+    $q.notify({
+      color: 'positive',
+      message: 'Network settings saved successfully.',
+      icon: 'check_circle'
+    });
+    // Очищаем поле пароля после успешного сохранения
+    passwordRef.value = '';
+    // Можно обновить данные после сохранения
+    await refreshData();
+  } catch (error) {
+    $q.notify({
+      color: 'negative',
+      message: `Failed to save network settings: ${getApiErrorMessage(error)}`,
+      icon: 'error'
+    });
+  } finally {
     isSavingNetwork.value = false;
-  }, 1500);
+  }
 };
 
-// TODO: При статусе OFFLINE все поля и кнопка должны быть disabled
 </script>
 
 <style scoped lang="scss">
@@ -106,28 +152,14 @@ const onSubmitNetwork = () => {
   border-radius: 12px;
 }
 
-/* Удаляем стили рамок */
-// :deep(.q-field--outlined .q-field__control) {
-//   border-radius: 8px;
-//   border-color: #6A7085;
-// }
-
-// :deep(.q-field--outlined.q-field--highlighted .q-field__control) {
-//   border-color: $primary;
-// }
-
-/* Стилизация QInput в соответствии с референсом */
+/* Стилизация QInput */
 :deep(.q-field--outlined .q-field__control) {
   border-radius: 8px;
-  border-color: #6A7085; // Обновляем цвет рамки
+  border-color: #6A7085;
 }
 
 :deep(.q-field--outlined.q-field--highlighted .q-field__control) {
   border-color: $primary;
-}
-
-:deep(.q-field__label) {
-  // Стили для label, если нужно
 }
 
 .q-btn {

@@ -1,15 +1,52 @@
 <template>
   <div class="row q-col-gutter-md">
-    <div class="col-12">
+    <!-- График Hashrate -->
+    <div class="col-12 col-md-4">
       <q-card flat class="chart-card text-white">
         <q-card-section>
-          <div class="text-h6">24 hours</div>
-          <div class="text-subtitle2 text-grey-6">TFLOPS</div>
+          <div class="text-subtitle1">Performance</div>
+          <div class="text-caption text-grey-6">Average TFLOPS (24h)</div>
+          <Line
+            v-if="hashrateChartData.labels?.length"
+            :data="hashrateChartData"
+            :options="hashrateChartOptions"
+            class="chart-canvas"
+          />
+          <div v-else class="chart-placeholder text-center q-pa-md">Loading chart data...</div>
+        </q-card-section>
+      </q-card>
+    </div>
 
-          <div class="q-mt-md">
-            <div class="text-caption text-grey-6">Производительность</div>
-            <Line v-if="chartData.labels && chartData.datasets" :data="chartData" :options="chartOptions" />
-          </div>
+    <!-- График Температуры -->
+    <div class="col-12 col-md-4">
+      <q-card flat class="chart-card text-white">
+        <q-card-section>
+          <div class="text-subtitle1">Temperature</div>
+          <div class="text-caption text-grey-6">Average Max °C (24h)</div>
+          <Line
+            v-if="tempChartData.labels?.length"
+            :data="tempChartData"
+            :options="tempChartOptions"
+            class="chart-canvas"
+           />
+           <div v-else class="chart-placeholder text-center q-pa-md">Loading chart data...</div>
+        </q-card-section>
+      </q-card>
+    </div>
+
+    <!-- График Мощности -->
+    <div class="col-12 col-md-4">
+      <q-card flat class="chart-card text-white">
+        <q-card-section>
+          <div class="text-subtitle1">Power Consumption</div>
+          <div class="text-caption text-grey-6">Average Watts (24h)</div>
+          <Line
+            v-if="powerChartData.labels?.length"
+            :data="powerChartData"
+            :options="powerChartOptions"
+            class="chart-canvas"
+          />
+          <div v-else class="chart-placeholder text-center q-pa-md">Loading chart data...</div>
         </q-card-section>
       </q-card>
     </div>
@@ -17,33 +54,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { useDeviceData } from '../../composables/useDeviceData'
-import { formatDate } from '../../utils/formatters'
-import type { HistoryMetric } from '../../services/api'
-import { Line } from 'vue-chartjs'
+import { ref, watch, computed } from 'vue';
+import { useDeviceData } from '../../composables/useDeviceData';
+import { formatDate } from '../../utils/formatters';
+import type { HistoryMetric } from '../../services/api';
+import { Line } from 'vue-chartjs';
 import {
-  type ChartData, type ChartOptions
-} from 'chart.js'
+  Chart as ChartJS,
+  Title,
+  Tooltip,
+  Legend,
+  LineElement,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  Filler,
+  type ChartData,
+  type ChartOptions
+} from 'chart.js';
 
-const { history } = useDeviceData()
+// Регистрация компонентов Chart.js
+ChartJS.register(
+  Title,
+  Tooltip,
+  Legend,
+  LineElement,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  Filler
+);
 
-const chartData = ref<ChartData<'line'>>({
-  labels: [],
-  datasets: []
-})
+const { history } = useDeviceData();
 
-const chartOptions = ref<ChartOptions<'line'>>({
+// --- Общие функции и опции --- 
+
+const baseChartOptions = computed<ChartOptions<'line'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  interaction: {
+      intersect: false,
+      mode: 'index',
+  },
   plugins: {
     legend: {
-      position: 'top',
-      align: 'end',
+      position: 'bottom',
+      align: 'center',
       labels: {
         color: 'white',
         usePointStyle: true,
-        boxWidth: 8
+        boxWidth: 8,
+        padding: 20
       }
     },
     tooltip: {
@@ -53,126 +114,148 @@ const chartOptions = ref<ChartOptions<'line'>>({
   },
   scales: {
     y: {
-      beginAtZero: true,
-      max: 35000,
+      beginAtZero: false, // Начинаем не всегда с нуля
       ticks: {
-        stepSize: 7000,
         color: '#8C8C8C',
       },
       grid: {
         color: 'rgba(255, 255, 255, 0.1)',
-        // @ts-expect-error - Опция валидна, но типы могут быть неточными
-        borderDash: [5, 5],
+        drawBorder: false,
       }
     },
     x: {
       ticks: {
         color: '#8C8C8C',
+        maxRotation: 0, // Предотвращаем поворот меток
+        autoSkip: true, // Автопропуск меток для читаемости
+        maxTicksLimit: 6 // Ограничиваем кол-во меток по X
       },
       grid: {
-        display: false,
+        display: false, // Убираем сетку по X
       }
     },
   },
-})
-
-const historyData = ref([
-  { date: '01 Apr', value: 3000 },
-  { date: '02 Apr', value: 13000 },
-  { date: '03 Apr', value: 9000 },
-  { date: '04 Apr', value: 21000 },
-  { date: '05 Apr', value: 7000 },
-  { date: '06 Apr', value: 7500 },
-  { date: '07 Apr', value: 29000 },
-  { date: '08 Apr', value: 15000 },
-  { date: '09 Apr', value: 23000 },
-  { date: '10 Apr', value: 6000 },
-  { date: '11 Apr', value: 24000 },
-  { date: '12 Apr', value: 20000 },
-])
-
-const createCharts = () => {
-  if (!history.value?.metrics?.length) return
-
-  const dates = history.value.metrics.map((m: HistoryMetric) => formatDate(m.unix_time * 1000))
-
-  chartData.value.labels = dates
-  chartData.value.datasets = [{
-    label: 'Average TFLOPS',
-    data: history.value.metrics.map((m: HistoryMetric) => m.hashrate.avg / 1000),
-    borderColor: '#00FF85',
-    backgroundColor: 'rgba(0, 255, 133, 0.1)',
-    tension: 0.4,
-    fill: true,
-    pointRadius: 4,
-    pointHoverRadius: 6
-  }]
-}
-
-const destroyCharts = () => {
-  chartData.value.labels = []
-  chartData.value.datasets = []
-}
-
-onMounted(() => {
-  createCharts()
-})
-
-watch(() => history.value, () => {
-  destroyCharts()
-  createCharts()
-}, { deep: true })
-
-onUnmounted(() => {
-  destroyCharts()
-})
-
-chartData.value = {
-  labels: historyData.value.map(item => item.date),
-  datasets: [
-    {
-      label: 'Item',
-      borderColor: '#00D182',
-      backgroundColor: (context) => {
-        const ctx = context.chart.ctx;
-        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-        gradient.addColorStop(0, 'rgba(0, 209, 130, 0.5)');
-        gradient.addColorStop(1, 'rgba(0, 209, 130, 0)');
-        return gradient;
+  elements: {
+      point: {
+          radius: 0, // Убираем точки
+          hoverRadius: 5 // Показываем при наведении
       },
-      borderWidth: 2,
-      pointRadius: 0,
-      pointHoverRadius: 5,
-      data: historyData.value.map(item => item.value),
+      line: {
+        tension: 0.3 // Сглаживание линии
+      }
+  }
+}));
+
+// --- Данные и опции для каждого графика --- 
+
+const hashrateChartData = ref<ChartData<'line'>>({ labels: [], datasets: [] });
+const tempChartData = ref<ChartData<'line'>>({ labels: [], datasets: [] });
+const powerChartData = ref<ChartData<'line'>>({ labels: [], datasets: [] });
+
+// Специфичные опции, наследующие базовые
+const hashrateChartOptions = computed<ChartOptions<'line'>>(() => ({ ...baseChartOptions.value }));
+const tempChartOptions = computed<ChartOptions<'line'>>(() => ({ ...baseChartOptions.value }));
+const powerChartOptions = computed<ChartOptions<'line'>>(() => ({ ...baseChartOptions.value }));
+
+// --- Функция обновления графиков --- 
+
+const updateCharts = () => {
+  const metrics = history.value?.metrics;
+  if (!metrics?.length) {
+    // Очищаем данные, если их нет
+    hashrateChartData.value = { labels: [], datasets: [] };
+    tempChartData.value = { labels: [], datasets: [] };
+    powerChartData.value = { labels: [], datasets: [] };
+    return;
+  }
+
+  const labels = metrics.map((m: HistoryMetric) => formatDate(m.unix_time * 1000));
+
+  // Hashrate Chart
+  hashrateChartData.value = {
+    labels,
+    datasets: [{
+      label: 'TFLOPS',
+      data: metrics.map((m: HistoryMetric) => m.hashrate.avg / 1e12), // Конвертируем в TFLOPS
+      borderColor: '#00D182',
+      backgroundColor: 'rgba(0, 209, 130, 0.1)',
       fill: true,
-      tension: 0.1
-    },
-  ],
-}
+    }]
+  };
+
+  // Temperature Chart
+  tempChartData.value = {
+    labels,
+    datasets: [
+      {
+        label: 'Temp IN',
+        data: metrics.map((m: HistoryMetric) => m.inlet_temp_max.avg),
+        borderColor: '#36A2EB',
+        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+        fill: false, // Не заливаем для второго графика
+      },
+      {
+        label: 'Temp OUT',
+        data: metrics.map((m: HistoryMetric) => m.outlet_temp_max.avg),
+        borderColor: '#FF6384',
+        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+        fill: false,
+      }
+    ]
+  };
+
+  // Power Chart
+  powerChartData.value = {
+    labels,
+    datasets: [{
+      label: 'Watts',
+      data: metrics.map((m: HistoryMetric) => m.power.avg),
+      borderColor: '#FFCE56',
+      backgroundColor: 'rgba(255, 206, 86, 0.1)',
+      fill: true,
+    }]
+  };
+};
+
+// --- Наблюдатель и жизненный цикл --- 
+
+// Обновляем графики при изменении данных истории
+watch(() => history.value, () => {
+  updateCharts();
+}, { deep: true, immediate: true }); // immediate: true для первоначальной отрисовки
+
 </script>
 
 <style lang="scss" scoped>
 .chart-card {
   background: #1E2139;
   border-radius: 8px;
-  
-  .text-h6 {
-    color: #FFFFFF;
-    font-size: 1.2rem;
-    font-weight: 500;
-    margin-bottom: 20px;
-  }
-  
-  canvas {
-    min-height: 300px;
-  }
-}
+  height: 100%; // Занимаем всю высоту колонки
+  display: flex;
+  flex-direction: column;
 
-.row {
-  margin: 0 -8px;
-  
-  > div {
-    padding: 8px;
+  .q-card-section {
+    flex-grow: 1; // Растягиваем секцию
+    display: flex;
+    flex-direction: column;
+  }
+
+  .text-subtitle1 {
+    font-weight: 500;
+  }
+
+  .chart-canvas {
+     min-height: 250px; // Задаем минимальную высоту
+     flex-grow: 1; // Позволяем графику расти
+  }
+
+  .chart-placeholder {
+      color: #8C8C8C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 250px; // Такая же минимальная высота, как у графика
+      flex-grow: 1;
   }
 }
 </style> 

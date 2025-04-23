@@ -3,7 +3,6 @@ import type { DeviceStatistics, DeviceHistory, DeviceConfig } from '../types'
 import type {
   StatisticResponse,
   HistoryResponse,
-  StatisticConf,
   ApiError as ApiErrorType,
 } from '../types/api'
 
@@ -117,8 +116,14 @@ export const stopBlink = async (): Promise<void> => {
   }
 }
 
-// Принимаем только необходимые поля, без password
-type ConfigUpdatePayload = Omit<StatisticConf, 'online' | 'password'>;
+// Определяем точный тип для payload, включая password
+// Omit<StatisticConf, 'online'>; // Старый вариант
+interface ConfigUpdatePayload {
+  ip: string; // Предполагаем string, а не number
+  port: number;
+  user: string;
+  password: string;
+}
 
 export const updateConfig = async (config: ConfigUpdatePayload): Promise<void> => {
   try {

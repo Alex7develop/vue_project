@@ -6,7 +6,7 @@
     icon="restart_alt"
     @click="confirmReboot"
     :loading="isRebooting"
-    :disable="!isOnline"
+    :disable="!isOnline || isRebooting"
     class="reboot-button"
   />
 </template>
@@ -14,10 +14,12 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useQuasar } from 'quasar';
+import { useDeviceData } from '../../composables/useDeviceData';
+import { rebootDevice, getApiErrorMessage } from '../../services/api';
 
 const $q = useQuasar();
+const { isOnline } = useDeviceData();
 
-const isOnline = ref(true);
 const isRebooting = ref(false);
 
 const confirmReboot = () => {
@@ -39,21 +41,31 @@ const confirmReboot = () => {
     },
     class: 'bg-dark text-white',
   }).onOk(() => {
-    handleReboot();
+    void handleReboot();
   });
 };
 
-const handleReboot = () => {
+const handleReboot = async () => {
   isRebooting.value = true;
   console.log('Rebooting device...');
-  setTimeout(() => {
-    isRebooting.value = false;
+  try {
+    await rebootDevice();
     $q.notify({
-        color: 'info',
-        message: 'Device reboot initiated.',
-        icon: 'info'
-      })
-  }, 2000);
+        color: 'positive',
+        message: 'Device reboot command sent successfully (API is a stub).',
+        icon: 'check_circle'
+      });
+  } catch (error) {
+    $q.notify({
+        color: 'negative',
+        message: `Failed to send reboot command: ${getApiErrorMessage(error)} (API is a stub)`,
+        icon: 'error'
+      });
+  } finally {
+    setTimeout(() => {
+       isRebooting.value = false;
+    }, 500);
+  }
 };
 </script>
 
